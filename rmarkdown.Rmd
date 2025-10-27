@@ -1,0 +1,812 @@
+---
+title: "Proyecto final"
+author: "Alejandro Escudero, Ágatha del Olmo, José Miguel Hernández, Adrián Moreno"
+date: "2023-04-12"
+output: html_document
+---
+
+## Introducción
+
+Este trabajo se centrará en el flujo demográfico de los suicidios, por ello, primero 
+realizaremos un breve marco teórico. 
+
+La definición de un suicidio ha cambiado mucho a lo largo del tiempo y las diferentes 
+culturas pero, por lo general, el suicidio ha sido visto siempre como un acto 
+deshonroso, solía ser cometido por guerreros que habían perdido una batalla. Durante la
+Edad Media, debido a la influencia de la Iglesia, su significado evolucionó y empezó a 
+ser considerado un pecado que no permitía la entrada al cielo
+
+Actualmente, según la RAE suicidarse consiste en “ Quitarse voluntariamente la vida”, 
+o “Una acción que es tan arriesgada que puede causar graves perjuicios a quien la 
+realiza”, pero debido a la naturaleza de este trabajo, la primera definición resulta
+más apropiada.
+A pesar de su importancia, el suicidio sigue siendo un tema tabú en muchas sociedades 
+y, por lo tanto se suele evitar hablar de él
+
+Este tabú es claramente expuesto en los grupos de edad más mayores de la sociedad 
+española, ya que los jovenes los cuales debido al Covid han experienciado un incremento en la atención por parte de la media y la sociedad en general por el aumento considerable en el número de suicidios que han sufrido este último año, como podemos ver en esta cita  “incremento de hasta un 47% en los trastornos de salud mental de los niños, y hasta un 59% en los comportamientos  suicidas, comparando con los datos de 2019”. Sin embargo, no ha sucedido lo mismo con sectores más maduros de la población, ya sea porque no ha habido un incremento o porque como nosotros creemos son los "olvidados"
+
+
+El desarrollo del trabajo se centrará en brindar información sobre este tema tabú, 
+específicamente, en la edad de las víctimas de suicidio y su relación con otras 
+variables, específicamente con el método empleado, con el fin de encontrar si existen 
+vínculos entre la edad y este.
+
+```{r, include=FALSE}
+
+library(rio)
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+library(plotly)
+library(writexl)
+library(gridExtra)
+library(scales)
+library(ggrepel)
+
+años<-c("13","14","15","16","17","18","19","20")
+
+df<-c()
+
+n<-length(años)
+
+k<-1
+
+
+ for (k in 1:n){    #lo mejor es probar si con un k funciona x si hay un error
+  
+  #setwd("") NO HACE FALTA SI ESTÁ EN EL PROYECTO
+  nombre <- paste("Datos/suicidios_20",años[k],".csv",sep="")
+  datos <- read.csv(file = nombre, sep = ";", dec = ".", header = T)
+  datos<-datos[,-2]
+  df <- rbind(df, datos)
+  
+}
+
+rm(datos)
+
+
+#Creamos los dataframes sin los datos totales
+df_sin_total <- df[df$Medio.empleado != "Total"& df$Sexo != "A" & df$Edad != "Todas las edades",]
+
+
+#Creamos los dataframes de los datos totales
+df_total <- df[df$Medio.empleado == "Total"& df$Sexo == "A" & df$Edad == "Todas las edades",]
+
+
+totales_metodo <-df_sin_total %>% 
+  group_by(Medio.empleado) %>% 
+  summarize (total = sum(Total))
+
+# Agrupaciones de metodo
+
+df_sin_total4<-df_sin_total %>% 
+  mutate(metodo_agrupado = case_when(Medio.empleado == "X60" | Medio.empleado == "X61" | Medio.empleado == "X62" |
+                                       Medio.empleado == "X63" | Medio.empleado == "X64" | Medio.empleado == "X65" |
+                                       Medio.empleado == "X66" | Medio.empleado == "X67" | Medio.empleado == "X68" |
+                                       Medio.empleado == "X69" ~ "Envenenamiento" ,
+                                     Medio.empleado == "X70" | Medio.empleado == "X71" ~ "Asfixia",
+                                     Medio.empleado == "X72" | Medio.empleado == "X73" | Medio.empleado == "X74" ~ "Disparo",
+                                     Medio.empleado == "X75" | Medio.empleado == "X76" | Medio.empleado == "X77" ~ "Exposicion calor",
+                                     Medio.empleado == "X78" ~ "Corte",
+                                     Medio.empleado == "X80" ~ "Precipitacion",
+                                     Medio.empleado == "X81" | Medio.empleado == "X82"~ "Vehiculos",
+                                     Medio.empleado == "X79" | Medio.empleado == "X83" | Medio.empleado == "X84"~ "Otros"))
+# 
+
+
+df_nuevo <- data.frame()
+
+ for (k in 1:n){    
+   
+  año <- paste("20",años[k],sep="")
+  
+  total_metodo_por_años <- df_sin_total4 %>% 
+    filter(Año == año) %>% 
+    group_by(Sexo, metodo_agrupado) %>% 
+    summarize(suma = sum(Total)) %>% 
+    mutate(años = año)
+  
+  df_nuevo <- rbind(df_nuevo, total_metodo_por_años)
+  
+ }
+
+
+```
+
+
+## Exploratory Data Analysis (EDA)
+
+En este apartado nos centraremos en explicar la preparación de los datos y variables que conforman el trabajo y para ello explicaremos todos los cambios realizados sobre estos
+
+De primeras, en nuestros datos originales y primarios, las bases de datos desde 2013-2020 de suicidios por medio empleado, sexo y edad, realizamos cambios en las variables de sexo y medio empleado y la creación de una nueva:
+
+* En la variable de Sexo las observaciones decidimos cambiarlas de "Hombre" y "Mujer" a "H" y "M" respectivamente para ahorrar tiempo durante el trabajo. Esto lo realizamos con unas de las herramientas de Execl, el buscar y reemplazar
+
+* La nueva columna tenái de nombre año, y era el año del excel que estábamos tratando, y decidimos crearla para poder tener un identificador del espacio temporal de cada observación cuando más tarde las unificasemos en un mismo dataframe
+
+* En la variable de medio empleado, el cambio que decidimos hacer fue utilizar solo el código identificador de cada método, es decir, el formato inicial de cada método se componía de un código único para cada tipo de método (que iban desde el X60 hasta el X84) y luego de que trataba ese método, por ejemplo, el primer método era: *X60. Envenenamiento autoinfligido intencionalmente por (exposición a) analgésicos no narcóticos, antipiréticos y antirreumáticos*.
+
+  Debido a la longitud, guardamos la explicación detallada de cada método en una cheatsheet y solo usamos el código identificador, X60, X61... Esto lo hicimos creando una nueva columna en el Excel y usando la función **IZQUIERDA[celda;3]**, con la cual solo seleccionábamos los 3 primeros carácteres de la celda indicada.
+  
+  
+Ligado con este último punto, a la hora de trabajar con los métodos al presentar un número tan elevado (24 distintos) fue considerado necesario la agrupación de estos, creando 8 grupos donde aglutinar los métodods con características similares a excepción del último grupo llamado otros que son medios sin especificar o insignificantes dentro de nuestra investigación. 
+
+Los nuevos grupos según el método son:
+
+
+* Envenenamiento 
+* Asfixia  
+* Disparo  
+* Exposición al calor  
+* Corte  
+* Precipitación  
+* Vehículos  
+* Otros  
+
+Los métodos desglosados se encuentran en la siguiente tabla:
+
+
+|MÉTODO INDIVIDUAL|MÉTODO AGRUPADO|
+| :-----------------: | :-------------: |
+|X60. Envenenamiento autoinfligido intencionalmente por (exposición a) analgésicos no narcóticos, antipiréticos y antirreumáticos | **ENVENENAMIENTO**
+|X61. Envenenamiento autoinfligido intencionalmente por (exposición a) drogas antiepilépticas, sedantes, hipnóticas, antiparkinsonianas y psicotrópicas, no clasificadas en otra parte
+|X62. Envenenamiento autoinfligido intencionalmente por (exposición a) narcóticos y psicodislépticos, no clasificados en otra parte
+|X63. Envenenamiento autoinfligido intencionalmente por (exposición a) otras drogas que actúan sobre el sistema nervioso autónomo
+|X64. Envenenamiento autoinfligido intencionalmente por (exposición a) otras drogas, medicamentos y sustancias biológicas, y los no especificados
+|X65. Envenenamiento autoinfligido intencionalmente por (exposición a) alcohol
+|X66. Envenenamiento autoinfligido intencionalmente por (exposición a) disolventes orgánicos e hidrocarburos halogenados y sus vapores
+|X67. Envenenamiento autoinfligido intencionalmente por (exposición a) otros gases y vapores
+|X68. Envenenamiento autoinfligido intencionalmente por (exposición a) plaguicidas
+|X69. Envenenamiento autoinfligido intencionalmente por (exposición a) otros productos químicos y sustancias nocivas, y los no especificados
+|X70. Lesión autoinfligida intencionalmente por ahorcamiento, estrangulamiento o sofocación|**ASFIXIA**|
+|X71. Lesión autoinfligida intencionalmente por ahogamiento y sumersión
+|X72. Lesión autoinfligida intencionalmente por disparo de arma corta| **DISPARO**|
+|X73. Lesión autoinfligida intencionalmente por disparo de rifle, escopeta y arma larga
+|X74. Lesión autoinfligida intencionalmente por disparo de otras armas de fuego, y las no especificadas 
+|X75. Lesión autoinfligida intencionalmente por material explosivo|**EXPOSICIÓN AL CALOR**|
+|X76. Lesión autoinfligida intencionalmente por humo, fuego y llamas
+|X77. Lesión autoinfligida intencionalmente por vapor de agua, otros vapores y objetos calientes
+|X78. Lesión autoinfligida intencionalmente por objeto cortante|**CORTE**|
+|X80. Lesión autoinfligida intencionalmente al saltar desde un lugar elevado|**PRECIPITACIÓN**|
+|X81. Lesión autoinfligida intencionalmente por arrojarse o colocarse delante de objeto en movimiento|**VEHÍCULOS**|
+|X82. Lesión autoinfligida intencionalmente por colisión de vehículo de motor
+|X83. Lesión autoinfligida intencionalmente por otros medios especificados|**OTROS**|
+|X84. Lesión autoinfligida intencionalmente por medios no especificados
+|X79. Lesión autoinfligida intencionalmente por objeto romo o sin filo
+
+
+El programa necesario para llevar acabo esta transformación fue R, en el que usamos la función case_when junto a un mutate, lo cual nos permite crear una nueva columna en el que podemos asignar un valor o nombre dependiendo del valor que tome en la variable que especifiquemos. Por ejemplo, en nuesto caso, queríamos que si la observación en la variable método tomaba cualquier valor desde X60 a X69, en la nueva columna creada  por el mutate se llamase Envenenamiento. Este es el código:
+
+```{r, results='hide'}
+df_sin_total4<-df_sin_total %>% 
+  mutate(metodo_agrupado = case_when(Medio.empleado == "X60" | Medio.empleado == "X61" | Medio.empleado == "X62" |
+                                       Medio.empleado == "X63" | Medio.empleado == "X64" | Medio.empleado == "X65" |
+                                       Medio.empleado == "X66" | Medio.empleado == "X67" | Medio.empleado == "X68" |
+                                       Medio.empleado == "X69" ~ "Envenenamiento" ,
+                                     Medio.empleado == "X70" | Medio.empleado == "X71" ~ "Asfixia",
+                                     Medio.empleado == "X72" | Medio.empleado == "X73" | Medio.empleado == "X74" ~ "Disparo",
+                                     Medio.empleado == "X75" | Medio.empleado == "X76" | Medio.empleado == "X77" ~ "Exposición al calor",
+                                     Medio.empleado == "X78" ~ "Corte",
+                                     Medio.empleado == "X80" ~ "Precipitación",
+                                     Medio.empleado == "X81" | Medio.empleado == "X82"~ "Vehículos",
+                                     Medio.empleado == "X79" | Medio.empleado == "X83" | Medio.empleado == "X84"~ "Otros"))
+```
+
+
+
+Siguiendo la misma idea que la última transformación, decidimos también agrupar las edades para poder alcanzar un mejor entendimiento de los gráficos ya que el INE nos proporcionaba la edad dividida en un total de 17 intervalos desiguales, por lo tanto trabajar con ellas en ciertos tipos de gráficos se volvía ineficiente. Ante este problema tuvimos la misma respuesTA que antes, creamos grupos que englobasen las edades que disponíamos
+
+Creímos conveniente por la tipología de nuestros gráficos hacer tres grupos de edad según las fases de de la vida, la juventud, la adultez y la vejez. Todo ello representado en la siguiente tabla: 
+
+|RANGO DE EDAD|GRUPO DE EDAD|
+| :-----------------: | :-------------: |
+|0 - 29 años|Joven|
+|30 - 64 años|Adulto|
+|+65 años|Anciano|
+
+Así pues, en vez de representar las edades por intervalos de 5 años, se puede realizar una imagen más clara del impacto de los suicidios en las tres principales etapas de la vida de una persona. Esto también lo realizaríamos con un case_when, aquí el código:
+
+```{r, results='hide'}
+df_total_edades<- df_sin_total4 %>% 
+    mutate(edad_agrupada = case_when(Edad == "0_15" | Edad == "15_29" ~ "joven" ,
+                                     Edad == "30_39" | Edad == "40_44" | 
+                                       Edad == "45_49" | Edad == "50_54" | 
+                                       Edad == "55_59" | Edad == "60_64"  ~ "adulto",
+                                     Edad == "65_69" | Edad == "70_74" |
+                                       Edad == "75_79" | Edad == "80_84" | 
+                                       Edad == "85_89" | Edad == "90_94" | 
+                                       Edad == "95_mas" ~ "anciano"))
+```
+
+
+Las transformaciones de datos ya explicadas han sido las más significativas a lo largo del trabajo, otras más específicas pueden ser:
+
+* El empleo de la fórmula **DERECHA(B2;2) & "-" & DERECHA(B3;2)** en Excel, que aplicábamos a una columna de años desde el 2013 hasta el 2020, y con la que conseguíamos un output así: 13-14. Esta fórmula la usamos para poder crear los intervalos de años que más tarde usaríamos para un gráfico
+
+* Otro uso de case_when pero para agrupar las edades de la población española que venían de año en año y tenían que coincidir con los intervalos ya creados anteriormente de los suicidios. El código usado fue este:
+
+```{r, eval=FALSE}
+hombre_2020 <- hombre_2020 %>% 
+    mutate(edad_agrupada = case_when(Edad == 0:4  ~ "0_04",
+                                     Edad == 5:9  ~ "05_09",
+                                     Edad == 10:14 ~ "10_14",
+                                     Edad == 15:19 ~ "15_19",
+                                     Edad == 20:24 ~ "20_24",
+                                     Edad == 25:29 ~ "25_29",
+                                     Edad == 30:34 ~ "30_34",
+                                     Edad == 35:39 ~ "35_39",
+                                     Edad == 40:44 ~ "40_44", 
+                                     Edad == 45:49 ~ "45_49",
+                                     Edad == 50:54 ~ "50_54",
+                                     Edad == 55:59 ~ "55_59",
+                                     Edad == 60:64 ~ "60_64",
+                                     Edad == 65:69 ~ "65_69",
+                                     Edad == 70:74 ~ "70_74",
+                                     Edad == 75:79 ~ "75_79",
+                                     Edad == 80:84 ~ "80_84",
+                                     Edad == 85:89 ~ "85_89",
+                                     Edad == 90:94 ~ "90_94",
+                                     Edad == 95 | Edad == 96 | Edad == 97 | 
+                                       Edad == 98 | Edad == 99 | Edad == 100 | 
+                                       Edad == 101 | Edad == 102 |Edad == 103 |
+                                       Edad == 104 | Edad == 105 ~ "95_mas"))
+```
+
+
+## Metodología y datos
+
+#### Metodología
+
+En el apartado de metodología tenemos que destacar el uso de dos programas; *Excel* y *R*, los cuales hemos usado para hacer las distintas medidas estadísticas que requerían los gráficos.
+
+* Proporciones de los grupo de edad, sabiendo el método de suicidio empleado. 
+
+  $$P_{ij} = \frac{S_{ij}}{N_{j}}$$
+
+  Para esta medida usamos una fórmula donde S~ij~ es el número de suicidios del grupo de edad *i* con método *j*, y N~j~ es el número total de suicidios con el método *j*.   El resultado, P~ij~, es la proporción sobre 1 de pertenecer al grupo de edad *i*, sabiendo que has usado el método *j*.
+
+  Estas proporciones las hemos calculado en R con este bucle y luego las hemos modificado para que a la hora de poner las equiteas, tuviesen un formato *.59*
+  
+```{r, include=FALSE}
+nuevo_df <- df_total_edades %>% 
+    group_by(edad_agrupada, metodo_agrupado) %>%
+    summarize (suma = sum(Total))
+
+  nuevo_df2 <- nuevo_df %>% 
+    group_by(metodo_agrupado) %>% 
+    summarize (suma2 = sum(suma))
+  
+  nombres_grupos <- nuevo_df2$metodo_agrupado
+  
+  totales <- nuevo_df2$suma2
+  
+  n2 <-length(nombres_grupos)
+  
+  nuevo_df3 <- data.frame()
+  
+  nuevo_df3$metodo_agrupado <- as.factor(nuevo_df3$metodo_agrupado)
+
+nuevo_df3$metodo_agrupado <- factor(nuevo_df3$metodo_agrupado, levels = c("Asfixia", "Precipitación", "Envenenamiento", "Disparo","Corte", "Vehículos","Exposición al calor", "Otros" ))
+
+```
+  
+  
+```{r, results='hide'}
+  
+
+  for (k in 1:n2){
+    
+    df5 <- nuevo_df %>% 
+      filter (metodo_agrupado == nombres_grupos[k]) %>% 
+      mutate(prob = round(suma/totales[k], 2))
+      
+    nuevo_df3 <- rbind(nuevo_df3, df5)
+    
+  }
+
+  valor<-  format(nuevo_df3$prob, nsmall = 1, decimal.mark = ".")
+  nuevo_df3$prob2 <- sub("^0","", valor)
+
+```
+  
+
+* Coeficiente de variación porcentual del número de suicidios por intervalo de edad. Esta ha medida ha sido calculada en Excel, la fórmula es:
+
+  $$\Delta\% = \frac{V_{i} - V_{i-1}}{V_{i-1}}$$
+
+  V~i~ es el número de suicidios del intervalo de edad en el año *i*, V~i-1~ es el número de suicidios de ese mismo intervalo de edad el año anterior.  
+  Después de hacer estos cálculos en Excel, aplicamos la función percent en R para conseguir el resultado en formato de porcentaje, ahora ejemplificamos con el uso de la función head, como estaban los datos antes del uso de la función percent
+  
+```{r, include=FALSE}
+
+graph2 <- read.csv(file = "./datos/df_edad_años.csv", sep = ";", dec = ".", header = T)
+
+  graph2$Edad <-  gsub("_mas", " o más",graph2$Edad)
+  
+  graph2$variacion.porc <- as.numeric(graph2$variacion.porc)
+  
+  graph2$variacion.porc <- round(graph2$variacion.porc,2)
+```
+  
+  
+```{r}
+head(graph2$variacion.porc)
+
+```
+  
+  Y ahora aquí podemos ver el cambio
+  
+```{r}
+graph2$variacion.porc2 <- percent(graph2$variacion.porc)
+head(graph2$variacion.porc2)
+```
+
+
+* Probabilidad de suicidio según intervalo de edad en 2020, es decir, si te has suicidado, la probabilidad de que pertenezcas a un intervalo de edad u otro. La fórmula para calcular esta medida depende del sexo al que pertenezcas debido a que estas probabilidades las usamos para hacer una pirámide poblacional. 
+
+$$P_{ij} = \frac{X_{ij}}{N_{i}}$$
+
+  Por lo tanto, X~ij~ es el número de personas que se han suicidado siendo de género *i* y edad *j*. N~i~ es los que se han suicidado de género *i*, dando de resultado P~ij~ que es la proporción de personas que se suicidan de género *i* y edad *j* relativo al total de su respectivo género.
+
+  Para calcular las probabilidades hemos usado este bucle en R, y también usamos la función percent para conseguir los resultados en formato de porcentaje 
+  
+```{r, include=FALSE}
+ df_intervalos_pequeños <- read.csv(file = "./datos/df_intervalos.csv", sep = ";", dec = ".", header = T)
+  
+  totales_suicidios2 <- df_intervalos_pequeños %>% 
+    group_by (Sexo) %>% 
+    summarize (total = sum(Total))
+  
+```
+  
+
+```{r, results='hide'}
+suicidios_2020 <- data.frame()
+  
+  for (k in 1:length(totales_suicidios2$total)) {
+    
+    suicidios_1 <- df_intervalos_pequeños %>% 
+      filter (Sexo == totales_suicidios2$Sexo[k]) %>% 
+      mutate (prob = round(Total/totales_suicidios2$total[k],3))
+    
+    
+    suicidios_2020 <- rbind(suicidios_2020, suicidios_1)
+    
+  }
+  
+  suicidios_2020$prob2 <- percent(suicidios_2020$prob)
+  
+  suicidios_2020$prob <- suicidios_2020$prob * 100
+  
+  suicidios_2020$Edad <-  gsub("_mas", " o más",suicidios_2020$Edad)
+```
+
+
+* Probabilidad de población según intervalo de edad en 2020, es decir, si formas parte de la población española, la probabilidad de que pertenezcas a un intervalo de edad u otro. La fórmula para calcular esta medida depende del sexo al que pertenezcas debido a que estas probabilidades las usamos para hacer una pirámide poblacional. 
+
+$$P_{ij} = \frac{X_{ij}}{N_{i}}$$
+
+  Por lo tanto, X~ij~ es el número de personas que forman parte de la población siendo de género *i* y edad *j*. N~i~ es los que son de género *i*, dando de resultado P~ij~ que es la proporción de personas  de género *i* y edad *j* relativo al total de su respectivo género.
+
+  Para calcular las probabilidades hemos usado este bucle en R, y al igual que antes también usamos la función percent para conseguir los resultados en formato de porcentaje 
+
+```{r, include=FALSE, warning=FALSE}
+
+  mujer_2020 <- read.csv(file = "./datos/mujer_2020.csv", sep = ";", dec = ".", 
+                         header = T)
+  
+  mujer_2020$Edad <- as.integer(mujer_2020$Edad)
+  
+  mujer_2020 <- mujer_2020 %>% 
+    mutate(edad_agrupada = case_when(Edad == 0:4  ~ "0_04",
+                                     Edad == 5:9  ~ "05_09" ,
+                                     Edad == 10:14 ~ "10_14",
+                                     Edad == 15:19 ~ "15_19",
+                                     Edad == 20:24 ~ "20_24",
+                                     Edad == 25:29 ~ "25_29",
+                                     Edad == 30:34 ~ "30_34",
+                                     Edad == 35:39 ~ "35_39",
+                                     Edad == 40:44 ~ "40_44", 
+                                     Edad == 45:49 ~ "45_49",
+                                     Edad == 50:54 ~ "50_54",
+                                     Edad == 55:59 ~ "55_59",
+                                     Edad == 60:64 ~ "60_64",
+                                     Edad == 65:69 ~ "65_69",
+                                     Edad == 70:74 ~ "70_74",
+                                     Edad == 75:79 ~ "75_79",
+                                     Edad == 80:84 ~ "80_84",
+                                     Edad == 85:89 ~ "85_89",
+                                     Edad == 90:94 ~ "90_94",
+                                     Edad == 95 | Edad == 96 | Edad == 97 | 
+                                       Edad ==98| Edad == 99 | Edad == 100 | 
+                                       Edad == 101 | Edad == 102 | Edad == 103 | 
+                                       Edad == 104 | Edad == 105 ~ "95 o más"))
+  
+  
+  hombre_2020 <- read.csv(file = "./datos/hombre_2020.csv", sep = ";", dec = ".", header = T)
+  
+  hombre_2020$Edad <- as.integer(hombre_2020$Edad)
+  
+  hombre_2020 <- hombre_2020 %>% 
+    mutate(edad_agrupada = case_when(Edad == 0:4  ~ "0_04",
+                                     Edad == 5:9  ~ "05_09",
+                                     Edad == 10:14 ~ "10_14",
+                                     Edad == 15:19 ~ "15_19",
+                                     Edad == 20:24 ~ "20_24",
+                                     Edad == 25:29 ~ "25_29",
+                                     Edad == 30:34 ~ "30_34",
+                                     Edad == 35:39 ~ "35_39",
+                                     Edad == 40:44 ~ "40_44", 
+                                     Edad == 45:49 ~ "45_49",
+                                     Edad == 50:54 ~ "50_54",
+                                     Edad == 55:59 ~ "55_59",
+                                     Edad == 60:64 ~ "60_64",
+                                     Edad == 65:69 ~ "65_69",
+                                     Edad == 70:74 ~ "70_74",
+                                     Edad == 75:79 ~ "75_79",
+                                     Edad == 80:84 ~ "80_84",
+                                     Edad == 85:89 ~ "85_89",
+                                     Edad == 90:94 ~ "90_94",
+                                     Edad == 95 | Edad == 96 | Edad == 97 | 
+                                       Edad == 98| Edad == 99 | Edad == 100 | 
+                                       Edad == 101 | Edad == 102 | Edad == 103 | 
+                                       Edad == 104 | Edad == 105 ~ "95 o más"))
+  
+  poblacion_2020 <- rbind(hombre_2020, mujer_2020)
+  
+  poblacion_2020 <- poblacion_2020[,-1]
+  
+  
+  # Calculo de probabilidades 
+  
+  poblacion_2020 <- poblacion_2020 %>% 
+    group_by (edad_agrupada, Sexo) %>% 
+    summarize (total = sum(Total))
+  
+  totales_poblacion <- poblacion_2020 %>% 
+    group_by(Sexo) %>% 
+    summarize (total = sum(total))
+
+```
+
+
+```{r}
+
+  poblacion_2020_final <- data.frame()
+  
+  
+  for (k in 1:length(totales_poblacion$total)) {
+    
+    poblacion_1 <- poblacion_2020 %>% 
+      filter (Sexo == totales_poblacion$Sexo[k]) %>% 
+      mutate (prob = round(total/totales_poblacion$total[k],3))
+    
+    
+    poblacion_2020_final <- rbind(poblacion_2020_final, poblacion_1)
+    
+  }
+  
+  poblacion_2020_final$prob2 <- percent(poblacion_2020_final$prob)
+  
+  poblacion_2020_final$prob <- poblacion_2020_final$prob * 100
+```
+
+* Probabilidad de empleo de un método u otro sabiendo el grupo de edad al que pertenece. Para calcular esta medida usaremos esta fórmula:
+
+$$P_{ij} = \frac{S_{ij}}{N_{j}}$$
+
+  Donde S~ij~ es el número de suicidios del grupo de edad *j* con método *i*, y N~j~ es el número total de suicidios del grupo de edad *j*
+  El resultado, P~ij~, es la proporción sobre 1 de usar el método *i*, sabiendo que perteneces al grupo de edad *j*
+  
+```{r, include=FALSE}
+df_edad_metodo <- df_total_edades %>% 
+    group_by(edad_agrupada, metodo_agrupado) %>% 
+    summarize(Suma = sum(Total))
+  
+  df_edad_metodo <- df_edad_metodo %>% mutate(edad_agrupada = case_when(
+    edad_agrupada == "adulto" ~ "Adulto", 
+    edad_agrupada == "anciano" ~ "Anciano",
+    edad_agrupada == "joven" ~"Joven"))
+  
+  
+  #saco los porcentajes para el gráfico de sectores
+  totales_edad <- df_edad_metodo %>% 
+    group_by (edad_agrupada) %>%
+    summarise(Suma = sum(Suma))
+```
+  
+
+```{r}
+ 
+  prop_edades <- data.frame()
+  
+  for (k in 1:length(totales_edad$Suma)) {
+    
+    prop_1 <- df_edad_metodo %>% 
+      filter (edad_agrupada == totales_edad$edad_agrupada[k]) %>% 
+      mutate (Proporcion = round(Suma/totales_edad$Suma[k],3))
+  
+    prop_edades <- rbind(prop_edades, prop_1)
+    
+  }
+
+```
+  
+
+  Además, debido a que hay 3 grupos de edad, para que la estética del *arrangement* del gráfico no se viese afectada, también hicimos esta probabilidad pero sin distinción entre edades, es decir, la probabilidad de que hayas usado x método si te has suicidado. 
+  
+  
+  $$P_{i} = \frac{S_{i}}{N}$$
+  
+  
+  S~i~ es el número de suicidios con método *i*, N es el número de suicidios totales y P~i~ la proporción de usar el método *i* en un suicidio
+  
+  
+
+```{r}
+total_suicidios <- sum(df_edad_metodo$Suma)
+  
+  proptotal <- df_edad_metodo %>% 
+    group_by(metodo_agrupado) %>% 
+    summarize (Suma = sum(Suma)) %>% 
+    mutate (Proporcion = round(Suma/total_suicidios,3)) %>% 
+    mutate (edad_agrupada = "Todas")
+
+  
+  
+```
+  
+
+  A todas las proporciones que calculamos para este gráfico, les aplicamos la función percent en R para un mejor entendimiento del gráfico
+  
+```{r}
+proporciones_edad <- rbind(prop_edades, proptotal)
+
+proporciones_edad$Porcentaje <- percent(round(proporciones_edad$Proporcion,3))
+```
+  
+  
+Por último destacar la creación de nuestra propia paleta, usada en dos de nuestros tres gráficos, este es el código:
+
+```{r, include=FALSE}
+paleta1 <- c("#A1EDD2", "#87E06C", "#F0E845", "#F4AA1E", "#E11710")
+```
+
+
+#### Datos
+
+Los datos usados han sido las bases de datos desde 2013-2020 de suicidios por medio empleado, sexo y edad, la base de datos de la población de hombres en 2020 en España, la de poblacion de mujeres de 2020 en España y un documento del ministerio de sanidad
+
+Dentro del código también se puede ver la carga de datos en formato csv como df_intervalos o df_edad_años pero esos son archivos creados por el propio grupo, con información proveniente de las fuentes mencionadas y donde hemos hecho limpiezas de datos convenientes para su posterior tratamiento.
+
+
+## Resultados
+
+Tras la limpieza de datos llevada a cabo en el apartado del EDA y las medidas estadíticas explicadas en la metodología, en este punto expondremos los resultados, que en nuestro caso son gráficos con los cuales explicaremos las diferentes relaciones entre las variables de las que consiste nuestro trabajo
+
+##### Primer gráfico
+
+La idea principal de nuestro trabajo reside en encontrar vínculos entre la edad del suicidio y variables como el sexo o el método empleado para suicidarse, pero antes de hacer el análisis de esa relación, es oportuno ver cómo se distribuyen los suicidios entre las distintas edades. Para ello, la pirámide poblacional es considerada una de las mejores representaciones gráficas posibles.
+
+En primera instancia, la pirámide iba a representar los datos absolutos de suicidios del año más reciente que disponemos 2020, sin embargo, debido a la gran diferencia en el reparto de suicidios entre sexo (1011 mujeres y 2930 hombres), el gráfico no era representativo de la distribución de las mujeres por sus bajas cifras.
+
+Además de la anterior razón, las cifras relativas nos ayudaban también a poder hacer una comparación entre dos pirámidespoblaciones
+
+```{r, echo=FALSE}
+
+piramide_suicidio <- ggplot(suicidios_2020, aes (x = Edad, y = prob, fill = Sexo)) +
+    geom_col(data = subset(suicidios_2020, Sexo == "H") %>% 
+               mutate (prob = - prob), 
+             fill = "blue", width = 0.7) +
+    geom_col(data = subset(suicidios_2020, Sexo == "M"), 
+             fill = "pink", width = 0.7) +
+    coord_flip() +
+    theme_minimal() +
+    labs (title = "Pirámide de distribución de los suicidios por edad en 2020",
+          x = "Grupos de edad",
+          y = "Hombres                     Mujeres") + 
+    theme(plot.title = element_text(hjust = 0.42),
+          axis.title.x = element_text(hjust = 0.43)) +
+    scale_y_continuous(breaks = seq(-12, 12, by = 2), 
+                       labels = paste0(c(seq(-12, 0, by = 2)*-1, seq(2, 12, by = 2)), "%"))
+  
+  piramide_suicidio
+
+```
+
+
+Además de la anterior razón, las cifras relativas nos ayudaban también a poder hacer una comparación entre dos pirámides poblaciones distintos, lo cual nos llevó a la idea de comparar la distribución de suicidios en España en 2020 con la pirámide poblacional española en 2020. Este segundo gráfico es tal que así:
+
+```{r, echo=FALSE}
+piramide_poblacion <- ggplot(poblacion_2020_final, aes (x = edad_agrupada, y = prob, fill = Sexo)) +
+    geom_col(data = subset(poblacion_2020_final, Sexo == "H") %>% 
+               mutate (prob = - prob), 
+             fill = "blue", width = 0.7) +
+    geom_col(data = subset(poblacion_2020_final, Sexo == "M"), 
+             fill = "pink", width = 0.7) +
+    coord_flip() +
+    theme_minimal() +
+    labs (title = "Pirámide poblacional española en 2020",
+          x = "Grupos de edad",
+          y = "Hombres                     Mujeres") + 
+    theme(plot.title = element_text(hjust = 0.5),
+          axis.title.x = element_text(hjust = 0.51)) +
+    scale_y_continuous(breaks = seq(-16, 16, by = 2), 
+                       labels = paste0(c(seq(-16, 0, by = 2)*-1, seq(2, 16, by = 2)), "%"))
+  
+  piramide_poblacion
+
+```
+
+Para mejor comparación decidimos unir los 2 con un grid.arrange, uno encima del otro para así poder comparar mejor las siluetas de ambas pirámides y ver sus similitudes
+
+```{r, echo=FALSE}
+grid.arrange(piramide_suicidio, piramide_poblacion, nrow = 2)
+```
+
+##### Segundo gráfico
+
+Tras conocer como se distribuyen los suicidios en un año concreto, 2020, es crucial para poder analizar las distintas conexiones, ver cómo han ido evolucionando los suicidios según el intervalo de edad en una serie temporal. Los años escogidos son desde el 2013 hasta el 2020 y se usará un mapa de calor con el que quedarán muy visuales los diferentes repuntes y concentraciones de suicidios a lo largo de estos años
+
+```{r, include=FALSE}
+df_edad_años <- df_total_edades %>% 
+    group_by(Edad, Año) %>% 
+    summarize(Total = sum(Total))
+
+df_edad_años$Edad <-  gsub("_mas", " o más",df_edad_años$Edad)
+
+```
+
+
+```{r, echo=FALSE}
+mapa_calor <- ggplot(df_edad_años, aes(x = as.factor(Año), y = Edad, fill = Total)) +
+    geom_tile(color = "white",
+              lwd = 1.5,
+              linetype = 1) +
+    labs(title = "Distribución de los suicidios por edad",
+         x = "Años",
+         y = "Edades") + 
+    scale_fill_gradientn(colors = paleta1) +
+    geom_text(aes(label = Total), color = "black", size = 3) +
+    theme_minimal()
+
+mapa_calor
+
+```
+
+Con este gráfico se puede observar de forma muy visual los picos en suicidios dirante diferentes años, debido a la paleta utilizada, donde los colores cálidos representan un número mayor y los fríos aquellas edades y años con menores cantidades de suicidios
+
+Como adición a este gráfico, para poder observar la evolución de una forma más equitativa para los diferentes intervalos de edad, hemos decidido usar una medida estadística relativa, la variación porcentual, con la que visualizaremos los aumentos o las disminuciones respectivos a los de su año pasado
+
+```{r echo=FALSE}
+
+mapa_calor2 <- ggplot(graph2, aes(x = as.factor(Intervalo), y = Edad, fill = variacion.porc)) +
+    geom_tile(color = "white",
+              lwd = 1.5,
+              linetype = 1) +
+    labs(title = "Variación porcentual de los suicidios por edad",
+         x = "Años",
+         y = "Edades") + 
+    scale_fill_gradientn(colors = paleta1, name = "Variación") +
+    geom_text(aes(label = variacion.porc2), color = "black", size = 3) +
+    theme_minimal()
+
+mapa_calor2
+
+```
+
+Para su mejor visualización, ambos gráficos han sido juntados con un grid.arrange
+
+```{r}
+grid.arrange(mapa_calor, mapa_calor2, nrow = 1)
+```
+
+
+##### Tercer gráfico
+
+Tras haber estudiado tanto la distribución como la evolución de los suicidios por edad, estudiar la relación entre esta y la variable restante, método empleado, es el objetivo de este tercer gráfico. Para ello, hemos usado probabilidades condicionadas
+
+Estas se dividen en 2 partes,primero veremos las proporciones de cada grupo de edad sabiendo el método empleado para suicidarse, a través de un gráfico de barras con un facet_wrap
+
+```{r, echo=FALSE}
+graph1 <- ggplot(nuevo_df3, aes(x = edad_agrupada , y = prob, fill = edad_agrupada)) +
+  geom_bar (position = "dodge", stat= "identity") +
+  theme(
+    legend.position="none",
+    plot.title = element_text(size=14),
+    panel.grid = element_blank(),
+  ) +
+  theme_grey() +
+  scale_fill_manual(values = c("#E11710", "#F0E845", "#87E06C"), labels = c("Adultos", "Ancianos", "Jóvenes")) +
+  scale_x_discrete(labels = c("Adu.", "Anc.", "Jóv."))+
+  geom_text(aes(label = prob2), color = "black", size = 3.5, position = position_nudge(x = 0, y = 0.05)) +
+  ggtitle("Proporciones del grupo de edad por metodo empleado") +
+  labs (fill = "Grupos de edad") +
+  xlab ("Grupos de edad") +
+  ylab("Proporción") + 
+  facet_wrap(~metodo_agrupado, ncol = 4)
+
+
+graph1
+```
+
+La segunda parte del tercer gráfico, consiste en la probabilidad condicionada contraria, sabiendo el grupo de edad al que pertenece el sujeto, que probabilidad tiene de haber usado cada método para suicidarse. Para ello hemos hecho un total de 4 gráficos de sectores, 1 por cada agrupación de edad, y otro total en el que no diferenciamos por edad
+
+```{r, echo=FALSE}
+
+grafico_sectores <- ggplot(proporciones_edad, aes(x = "", y = Proporcion, fill = metodo_agrupado)) +
+    geom_col(width = 1, color = 1) +
+    labs(title= "Proporción del empleo de cada método por grupos de edad")+
+    theme (plot.title = element_text(hjust = 2)) +
+    coord_polar(theta = "y")+
+    geom_label_repel(data = subset(proporciones_edad, Proporcion >= 0.009),
+                     aes(y = Proporcion, label = Porcentaje),
+                     position = position_stack(vjust = 0.5),
+                     min.segment.length = 5,
+                     size = 3, 
+                     show.legend = FALSE) +
+    guides(fill = guide_legend(title = "Método")) +
+    scale_fill_manual(values = c("#E11710", "#F97A32", "#F4AA1E", "#E6E241", 
+                                 "#CDEA68", "#87E06C", "#A1EDD2", "#FAF0FB")) +
+    facet_wrap(~edad_agrupada ,nrow = 2) +
+    theme_void()
+  
+  grafico_sectores
+
+```
+
+
+Por último juntamos ambos gráficos con un facet.grid y con el argumento de layout_matrix para poder elegir las proporciones al gusto
+
+```{r, echo=FALSE}
+
+grid.arrange(graph1, grafico_sectores,
+               layout_matrix = rbind(c(1,1,2,2),c(1,1,2,2)))
+
+```
+
+## Conclusiones
+
+ Los resultados confirman que, estadísticamente, hay una diferencia en la naturaleza del suicidio según la edad del individuo y otras variables que influyen en este.
+ 
+Para empezar, como vemos en el primer gráfico la distribución del suicidio en España se asemeja a la distribución Española, con una forma  de campana. Este tipo de pirámide de población regresiva es propia de los países más desarrollados, que tienen una población más bien envejecida dado a la tasa baja de mortalidad por los avances médicos y de calidad de vida, y la baja tasa de natalidad por la inserción de la mujer en el trabajo entre otros factores. 
+Las razones por las que los que los suicidios siguen esa misma distribución pueden ser muchas y muy subjetivas, pero es cierto que el hecho de que haya una cantidad mayor de personas entre 40 y 59 años afecta en este repunte que vemos. Aún siguiendo el mismo patrón, encontramos esencial mencionar la diferencia entre las pirámides en las edades de 0 a 14, que en la de suicidios son muy reducidas mientras que en la de población está en la media. Esto se debe a que los niños no tienen desarrollados conceptos tan complicados como la muerte y menos aún el suicidio, además de que se considera que sufren mucho menos de factores estresantes que se dan en el mundo laboral y por problemas económicos, más comunes en los adultos y ancianos. 
+
+Por otro lado es importante tener en cuenta que, como hemos mencionado, el suicidio es un estigma hoy día y esto puede ser razón por la que se subregistren suicidios de los niños por razones de privacidad y miedo por exclusión social. 
+
+Por lo tanto, a pesar de esta pequeña diferencia, las pirámides son bastante similares, y por tanto no hay un fenómeno que lleve a un gran repunte que tengamos que destacar además de la falta de suicidios en niños.
+
+
+Después podemos ver la evolución de los suicidios por edad desde 2013 hasta 2020 y la tasa de variación entre cada uno de esos años. El primer mapa de calor nos deja claro lo que ya vimos, ya que están muy concentrados los suicidios entre los 30 y 59, con números muy bajos de 0 a 15 años y de 95 hacia arriba. 
+
+El segundo mapa de calor es muy interesante ya que nos muestra la variación de suicidios entre un año y el otro. Vemos que a lo largo de los años no hubo una tendencia únicamente ascendente o descendente, sino a equilibrarse, sobre todo entre los rangos de edad con más cantidad de suicidios, pues al ser números tan grandes no es fácil que la variación sea tan significativa como en niños y ancianos. La variación a destacar es la de de 2019 a 2020, vemos que por primera vez todos los suicidios suben menos por el intervalo entre 30 y 39 años que se mantiene constante y de 75 a 79 años que baja muy levemente. Las edades en las que se ve este repunte más claramente es en niños de 0 a 15 duplicándose la cantidad y ancianos de más de 95 en un 67%. 
+La razón podría ser el aislamiento social a raíz de la cuarentena con el estado de alarma del COVID-19 entre el 14 de marzo y el 21 de junio de 2020 que los primeros pasaron dando clases online en casa sin poder salir y los segundos solos en residencias sin poder recibir visitas. Así pues, podemos decir que fue 2020 el año más destacable de entre estos con un aumento significativo entre niños y ancianos por la crisis social raíz del COVID-19.
+ 
+Por último vemos la relación entre edad y el método empleado. Por un lado vemos la probabilidad de ser de un grupo de edad sabiendo que se ha llevado a cabo cierto método. Según la cantidad total de suicidios en cada uno de los grupos de edad la cantidad proporcional será mayor, pues la probabilidad de suicidarse es mayor en general, pero es interesante ver que en algunos es menos notable la diferencia y en otros más exagerada. Por ejemplo, no es tan común entre adultos precipitarse de un lugar alto mientras que entre los ancianos es muy común teniendo en cuenta la cantidad de ancianos suicidándose en comparación con la de adultos. 
+Así mismo vemos que, teniendo en cuenta la muy menor proporción de jóvenes suicidándose en comparación a los otros, es muy alto el porcentaje en “vehículos”.
+
+En los gráficos de sectores vemos la probabilidad de usar un método u otro sabiendo que eres de un grupo de edad. En “Todas” observamos primero en general que asfixia es el método más usado, seguido por precipitación y envenenamiento siendo los demás métodos parecidos en cantidad, desde 5% a casi 0%. 
+En cada edad las distribuciones son similares a la del total, con pequeñas diferencias. Las más interesantes son que en joven el 31.3% usan la precipitación, cifra bastante cercana al 46.6% de asfixia con solo un 15.3% de diferencia, mientras que en adulto y anciano, la diferencia es de 26.2% y 24% respectivamente. Además, vemos que el envenenamiento en los adultos representa más porcentaje que en los demás, con un 14.4% mientras que en los otros es muy similar, joven con 8.2% y anciano con 8.5%. Por último vemos que la probabilidad de usar la asfixia en ancianos es la más grande de entre los tres rangos de edad, esta diferencia no es tan grande, con un 51.9% en ancianos, 48.7% en adultos y 46.8% en jóvenes, pero no deja de ser representativa.
+
+
+Teniendo en cuenta todo lo expuesto hasta ahora, somos capaces de contestar a una de nuestras hipótesis del principio del trabajo, que los adultos y los ancianos sufren del tabú del suicidio ya que ambos grupos de edad conforman la vasta mayoría de suicidios y ambos también han sufrido repuntes importantes en el 2020, sin embargo, solo se comenta el aumento en el grupo de edad más joven. 
+En cuanto a la otra cuestión que se planteaba al principio del trabajo, comprobar la relación entre el medio empleado y la edad, se puede afirmar que hay ciertas relaciones, por ejemplo, los jóvenes con un porcentaje el doble a los ancianos y adultos en el método "Vehículos" o un 52% de los ancianos hanbiendo usado la asfixia para suicidarse, sin embargo, observamos un comportamiento similar entre los diferentes grupos de edad a la hora de elegir un método.
+
+
+
+## Bibliografía
+
+* Asale, R.-. (s. f.). suicidio | Diccionario de la lengua española. «Diccionario de la lengua española» - Edición del Tricentenario. https://dle.rae.es/suicidio
+
+* Minois, G. (1999). History of Suicide: Voluntary Death in Western Culture.
+
+* Mujica, N. D. (2018, 2 mayo). EL SUICIDIO EN LA HISTORIA - Suicidio en Gotas - Medium. Medium. https://medium.com/suicidio-en-gotas/el-suicidio-en-la-historia-dcb4ae57784c
+
+* Psiquiatria.comAlertan de que crecen hasta un 59% los comportamientos suicidas en los jóvenes. (s. f.). Psiquiatria.com. https://psiquiatria.com/suicidio/alertan-de-que-crecen-hasta-un-59-los-comportamientos-suicidas-en-los-jovenes/
+
+* INE - Instituto Nacional de Estadística. (s. f.). Loading. INE. https://www.ine.es/up/R6Evpj5Wi1
+
+* INE - Instituto Nacional de Estadística. (s. f.-b). Loading. INE. https://www.ine.es/up/c4r0dL53iA
+
+* RStudio Team (2020). RStudio: Integrated Development for R. RStudio, PBC, Boston, MA URL http://www.rstudio.com/.
